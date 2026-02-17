@@ -1,0 +1,33 @@
+[project]
+name = "speaker-diarization"
+version = "0.1.0"
+description = "speaker-diarization"
+readme = "README.md"
+requires-python = "==3.10.*"
+dependencies = [
+    "requests>=2.32.5",
+    "scikit-learn",
+    "soundfile>=0.13.1",
+    "speechbrain==1.0.3",
+    "torch",
+    "torchaudio==2.8.0",
+    "torchvision==0.23.0",
+    "huggingface-hub<1.0.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+torchvision = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchaudio = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
