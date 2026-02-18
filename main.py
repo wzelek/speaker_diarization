@@ -1,40 +1,46 @@
+import json
+import os
+from nemo.collections.asr.models import ClusteringDiarizer
+from omegaconf import OmegaConf
+from pydub import AudioSegment
 
-import soundfile as sf
-import torch
+audio = AudioSegment.from_file("conversation.mp3")
+audio = audio.set_channels(1)  # mono
+audio.export("conversation.wav", format="wav")
 
-signal, fs = sf.read("conversation.mp3")
+# manifest
+with open('conf/input_manifest.json','w') as fp:
+    fp.write(json.dumps(
+        {
+        "audio_filepath": "conversation.wav",
+        "offset": 0,
+        "duration": None,
+        "label": "infer",
+        "text": "-",
+        "num_speakers": None,
+        "rttm_filepath": None,
+        "uem_filepath": None
+    }))
 
+# config
+config = OmegaConf.load("conf/inference/diar_infer_general.yaml")
 
-import numpy as np
-from speechbrain.inference import SpeakerRecognition
-from speechbrain.processing.diarization import Spec_Cluster
+output_dir = os.path.join("./", 'oracle_vad')
+os.makedirs(output_dir,exist_ok=True)
 
-window_size = int(fs * 1.0)  # segment 1s
-segments = [signal[i:i+window_size] for i in range(0, len(signal), window_size)]
+config.diarizer.manifest_filepath = 'conf/input_manifest.json'
+config.diarizer.out_dir = output_dir # Directory to store intermediate files and prediction outputs
+pretrained_speaker_model = 'titanet_large'
+config.diarizer.speaker_embeddings.model_path = pretrained_speaker_model
+config.diarizer.speaker_embeddings.parameters.window_length_in_sec = [1.5,1.25,1.0,0.75,0.5]
+config.diarizer.speaker_embeddings.parameters.shift_length_in_sec = [0.75,0.625,0.5,0.375,0.1]
+config.diarizer.speaker_embeddings.parameters.multiscale_weights= [1,1,1,1,1]
 
-# 3) Wyodrębnij embeddingi
-spkrec = SpeakerRecognition.from_hparams(
-    source="speechbrain/spkrec-ecapa-voxceleb",
-    savedir="pretrained_models/spkrec"
-)
+config.diarizer.oracle_vad = False
+config.diarizer.clustering.parameters.oracle_num_speakers = False
+config.diarizer.num_workers = 12
+config.diarizer.vad.num_workers = 0
 
-embeddings = []
-for seg in segments:
-    # convert to mono and proper shape
-    emb = spkrec.encode_batch(torch.from_numpy(seg).unsqueeze(0)).squeeze().detach().numpy()
-    embeddings.append(emb)
+model = ClusteringDiarizer(cfg=config)
 
-embeddings = np.stack(embeddings)
-
-# 4) Klasteryzacja spektralna (np. 2 mówców)
-clusterer = Spec_Cluster(
-    embed=embeddings,
-    num_speakers=2
-)
-labels = clusterer.run()
-
-# 5) Wypisz segmenty z etykietami
-for i, label in enumerate(labels):
-    start = i * 1.0
-    end = start + 1.0
-    print(f"Speaker {int(label)+1}: {start:.1f}s–{end:.1f}s")
+model.diarize()
