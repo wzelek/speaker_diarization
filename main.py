@@ -9,6 +9,11 @@ import numpy as np
 import soundfile as sf
 import matplotlib.pyplot as plt
 import plotly.graph_objs as go
+import pandas as pd
+
+DEFAULT_FILE = "conversation.mp3"
+OUTPUT_DIR = "diarization_output"
+CONFIG_DIR = "conf/inference"
 
 def parse_rttm(rttm_path):
     segments = []
@@ -21,6 +26,35 @@ def parse_rttm(rttm_path):
             segments.append((start, start + duration, speaker))
     return segments
 
+def rttm_to_dataframe(rttm_content):
+    """
+    Convert RTTM content to a Pandas DataFrame with columns:
+    ['Speaker', 'Start (s)', 'End (s)', 'Duration (s)', 'Start (MM:SS)', 'End (MM:SS)']
+    """
+    def sec_to_mmss(seconds):
+        m = int(seconds // 60)
+        s = int(seconds % 60)
+        return f"{m:02d}:{s:02d}"
+    
+    rows = []
+    for line in rttm_content.strip().split("\n"):
+        parts = line.split()
+        if len(parts) >= 8:
+            start = float(parts[3])
+            duration = float(parts[4])
+            end = start + duration
+            speaker = parts[7]
+            rows.append({
+                "Speaker": speaker,
+                "Start (s)": round(start, 2),
+                "Start (MM:SS)": sec_to_mmss(start),
+                "End (s)": round(end, 2),
+                "End (MM:SS)": sec_to_mmss(end),
+                "Duration (s)": round(duration, 2),
+            })
+    return pd.DataFrame(rows)
+
+
 @st.cache_resource
 def get_waveform(wav_path):
     audio_data, sr = sf.read(wav_path)
@@ -28,164 +62,214 @@ def get_waveform(wav_path):
         audio_data = audio_data[:, 0]
     return audio_data, sr
 
-st.set_page_config(page_title="Speaker Diarization", layout="centered")
+def show_results(results):
 
-st.title("Speaker Diarization")
+    # Inside your diarization block after results are loaded
+    df_rttm = rttm_to_dataframe(results["rttm_content"])
+    st.subheader("Diarization Segments")
+    st.dataframe(df_rttm)
 
+    st.download_button(
+        label="Download RTTM",
+        data=results["rttm_content"],
+        file_name="diarization.rttm",
+        mime="text/plain"
+    )
 
-st.sidebar.header("Upload Audio")
+    # Show results
+    rttm_file = os.path.join(
+        OUTPUT_DIR,
+        "pred_rttms",
+        os.path.basename(results["wav_path"]).replace(".wav", ".rttm")
+    )
 
-uploaded_file = st.sidebar.file_uploader(
-    "Upload an audio file",
-    type=["mp3", "mp4", "mpeg", "wav"]
-)
+    audio_data, sr = get_waveform(results["wav_path"])
 
-DEFAULT_FILE = "conversation.mp3"
-OUTPUT_DIR = "diarization_output"
-CONFIG_DIR = "conf/inference"
+    time_axis = np.linspace(0, len(audio_data)/sr, num=len(audio_data))
+    segments = parse_rttm(rttm_file)
+    speakers = list(set([s[2] for s in segments]))
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Dynamically list YAML config files
-if os.path.exists(CONFIG_DIR):
-    config_files = [
-        f for f in os.listdir(CONFIG_DIR)
-        if f.endswith(".yaml") or f.endswith(".yml")
-    ]
-else:
-    config_files = []
-
-if not config_files:
-    st.sidebar.error("No config files found in conf/inference/")
-    st.stop()
-
-
-selected_config = st.sidebar.selectbox(
-        "Select Diarization Config",
-        config_files
-)
+    # Map speakers to colors
+    speaker_colors = {spk: f"rgba({i*50%255},{i*80%255},{i*120%255},0.4)" 
+                    for i, spk in enumerate(speakers)}
 
 
-if st.sidebar.button("Run Diarization"):
+    # Prepare hover speaker array
+    speaker_hover = [""] * len(time_axis)
+    for start, end, speaker in segments:
+        # find indices in time_axis that are inside this segment
+        indices = np.where((time_axis >= start) & (time_axis <= end))[0]
+        for idx in indices:
+            speaker_hover[idx] = speaker
 
-    with st.spinner("Processing audio...", show_time=True):
+    fig = go.Figure()
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+    ds = 1000  # every 10th sample
+    time_axis = time_axis[::ds]
+    audio_display = audio_data[::ds]
 
-            if uploaded_file is not None:
-                input_path = os.path.join(tmpdir, uploaded_file.name)
-                with open(input_path, "wb") as f:
-                    f.write(uploaded_file.read())
-            else:
-                if not os.path.exists(DEFAULT_FILE):
-                    st.error("No file uploaded and default conversation.mp3 not found.")
-                    st.stop()
+    fig.add_trace(go.Scatter(
+        x=time_axis,
+        y=audio_display,
+        mode='lines',
+        line=dict(color='lightgrey'),
+        name='Waveform'
+    ))
 
-                input_path = DEFAULT_FILE
-                st.info("Using default file: conversation.mp3")
+    # Add speaker regions
+    for start, end, speaker in segments:
+        fig.add_vrect(
+            x0=start,
+            x1=end,
+            fillcolor=speaker_colors[speaker],
+            opacity=0.4,
+            line_width=0,
+            annotation_text=speaker,
+            annotation_position="top left"
+        )
+
+    fig.update_layout(
+        title="Speaker Timeline (interactive)",
+        xaxis_title="Time (s)",
+        yaxis_title="Amplitude",
+        showlegend=False,
+        height=400
+    )
+
+    plot_container = st.container()
+    with plot_container:
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Audio playback
+    st.audio(results["wav_path"])
+
+def show():
+
+    st.set_page_config(page_title="Speaker Diarization", layout="wide")
+
+    st.title("Speaker Diarization")
+
+    st.sidebar.header("Upload Audio")
+
+    uploaded_file = st.sidebar.file_uploader(
+        "Upload an audio file",
+        type=["mp3", "mp4", "mpeg", "wav"]
+    )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Dynamically list YAML config files
+    if os.path.exists(CONFIG_DIR):
+        config_files = [
+            f for f in os.listdir(CONFIG_DIR)
+            if f.endswith(".yaml") or f.endswith(".yml")
+        ]
+    else:
+        config_files = []
+
+    if not config_files:
+        st.sidebar.error("No config files found in conf/inference/")
+        st.stop()
 
 
-            os.system(f"rm -rf {OUTPUT_DIR}") if os.path.exists(OUTPUT_DIR) else None
-            os.makedirs(OUTPUT_DIR, exist_ok=True)
+    selected_config = st.sidebar.selectbox(
+            "Select Diarization Config",
+            config_files, index=1
+    )
 
-            wav_path = os.path.join(tmpdir, "input.wav")
+    clicked = st.sidebar.button("Run Diarization")
+    if clicked or st.session_state.get("diarization_results") is not None:
 
-            # Convert to mono WAV
-            audio = AudioSegment.from_file(input_path)
-            audio = audio.set_channels(1)
-            audio.export(wav_path, format="wav")
+        prev_diarization_results = st.session_state.get("diarization_results") 
 
-            # Create manifest
-            manifest_path = os.path.join(tmpdir, "manifest.json")
-          
-            with open(manifest_path, "w") as fp:
-                json.dump({
-                    "audio_filepath": wav_path,
-                    "offset": 0,
-                    "duration": None,
-                    "label": "infer",
-                    "text": "-",
-                    "num_speakers": None,
-                    "rttm_filepath": None,
-                    "uem_filepath": None
-                }, fp)
+        if prev_diarization_results is None or clicked:
 
-            # Load NeMo config
-            config_path = os.path.join(CONFIG_DIR, selected_config)
-            config = OmegaConf.load(config_path)
+            with st.spinner("Processing audio...", show_time=True):
+                
+                prev_diarization_results = st.session_state.get("diarization_results") 
+                if prev_diarization_results: 
+                    os.system(f"rm -rf {prev_diarization_results['tmpdir']}")
 
-            config.diarizer.manifest_filepath = manifest_path
-            config.diarizer.out_dir = OUTPUT_DIR
+                with tempfile.TemporaryDirectory(delete=False) as tmpdir:
 
-            # Run diarization
-            model = ClusteringDiarizer(cfg=config)
-            model.diarize()
+                    if uploaded_file is not None:
+                        input_path = os.path.join(tmpdir, uploaded_file.name)
+                        with open(input_path, "wb") as f:
+                            f.write(uploaded_file.read())
+                    else:
+                        if not os.path.exists(DEFAULT_FILE):
+                            st.error("No file uploaded and default conversation.mp3 not found.")
+                            st.stop()
+ 
+                        input_path = DEFAULT_FILE
+                        st.info("Using default file: conversation.mp3")
 
-            # Show results
-            rttm_file = os.path.join(
-                OUTPUT_DIR,
-                "pred_rttms",
-                os.path.basename(wav_path).replace(".wav", ".rttm")
-            )
 
-            if rttm_file and os.path.exists(rttm_file):
+                    os.system(f"rm -rf {OUTPUT_DIR}") if os.path.exists(OUTPUT_DIR) else None
+                    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-                st.toast("Diarization complete ✅")
+                    wav_path = os.path.join(tmpdir, "input.wav")
 
-                with open(rttm_file, "r") as f:
-                    rttm_content = f.read()
+                    # Convert to mono WAV
+                    audio = AudioSegment.from_file(input_path)
+                    audio = audio.set_channels(1)
+                    audio.export(wav_path, format="wav")
 
-                audio_data, sr = get_waveform(wav_path)
+                    # Create manifest
+                    manifest_path = os.path.join(tmpdir, "manifest.json")
+                
+                    with open(manifest_path, "w") as fp:
+                        json.dump({
+                            "audio_filepath": wav_path,
+                            "offset": 0,
+                            "duration": None,
+                            "label": "infer",
+                            "text": "-",
+                            "num_speakers": None,
+                            "rttm_filepath": None,
+                            "uem_filepath": None
+                        }, fp)
 
-                time_axis = np.linspace(0, len(audio_data)/sr, num=len(audio_data))
-                segments = parse_rttm(rttm_file)
-                speakers = list(set([s[2] for s in segments]))
+                    # Load NeMo config
+                    config_path = os.path.join(CONFIG_DIR, selected_config)
+                    config = OmegaConf.load(config_path)
 
-                # Map speakers to colors
-                speaker_colors = {spk: f"rgba({i*50%255},{i*80%255},{i*120%255},0.4)" 
-                                for i, spk in enumerate(speakers)}
+                    config.diarizer.manifest_filepath = manifest_path
+                    config.diarizer.out_dir = OUTPUT_DIR
 
-                # Plot waveform
-                fig = go.Figure()
+                    # Run diarization
+                    model = ClusteringDiarizer(cfg=config)
+                    model.diarize()
 
-                ds = 100  # every 100th sample
-                time_axis = time_axis[::ds]
-                audio_display = audio_data[::ds]
-
-                fig.add_trace(go.Scatter(
-                    x=time_axis,
-                    y=audio_display,
-                    mode='lines',
-                    line=dict(color='lightgrey'),
-                    name='Waveform'
-                ))
-
-                # Add speaker regions
-                for start, end, speaker in segments:
-                    fig.add_vrect(
-                        x0=start,
-                        x1=end,
-                        fillcolor=speaker_colors[speaker],
-                        opacity=0.4,
-                        line_width=0,
-                        annotation_text=speaker,
-                        annotation_position="top left"
+                    rttm_file = os.path.join(
+                        OUTPUT_DIR, "pred_rttms",
+                        os.path.basename(wav_path).replace(".wav", ".rttm")
                     )
 
-                fig.update_layout(
-                    title="🎙️ Speaker Timeline (interactive)",
-                    xaxis_title="Time (s)",
-                    yaxis_title="Amplitude",
-                    showlegend=False,
-                    height=400
-                )
+                    if not os.path.exists(rttm_file):
+                        st.error("No RTTM file generated.")
+                        st.stop()
 
-                plot_container = st.container()
-                with plot_container:
-                    st.plotly_chart(fig, use_container_width=True)
+                    with open(rttm_file, "r") as f:
+                        rttm_content = f.read()
 
-                # Audio playback
-                st.audio(wav_path)
+                    audio_data, sr = get_waveform(wav_path)
+                    segments = parse_rttm(rttm_file)
 
-            else:
-                st.error("No RTTM file generated.")
+                    st.session_state.diarization_results = {
+                        "wav_path": wav_path,
+                        "rttm_content": rttm_content,
+                        "audio_data": audio_data,
+                        "sr": sr,
+                        "segments": segments, 
+                        "tmpdir": tmpdir
+                    }
+
+                    # Show RTTM
+                    st.toast("Diarization complete ✅")
+
+
+        results = st.session_state.diarization_results
+        show_results(results)
+
+show()
