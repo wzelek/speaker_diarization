@@ -11,10 +11,11 @@ import plotly.graph_objs as go
 from pydub import AudioSegment
 from omegaconf import OmegaConf
 from nemo.collections.asr.models import ClusteringDiarizer
+from pathlib import Path
 
 DEFAULT_FILE = "conversation.mp3"
 OUTPUT_DIR = "diarization_output"
-CONFIG_DIR = "conf/inference"
+CONFIG_DIR = "conf"
 
 def parse_rttm(rttm_path: str) -> List[Tuple[float, float, str]]:
     """Parse RTTM file into list of segments (start, end, speaker)."""
@@ -101,7 +102,7 @@ def plot_waveform_with_speakers(audio_data: np.ndarray, sr: int, segments: List[
     return fig
 
 
-def run_diarization(input_file: str, config_file: str) -> Dict[str, Any]:
+def run_diarization(input_file: str, config_file: str, reference_rttm: str = None) -> Dict[str, Any]:
     """Run NeMo Clustering Diarizer and return results."""
     tmpdir = tempfile.mkdtemp()
     wav_path = os.path.join(tmpdir, "input.wav")
@@ -110,7 +111,12 @@ def run_diarization(input_file: str, config_file: str) -> Dict[str, Any]:
     audio = AudioSegment.from_file(input_file)
     audio = audio.set_channels(1)
     audio.export(wav_path, format="wav")
-
+   
+    if reference_rttm:
+        rttm_path_for_manifest = os.path.join(tmpdir, reference_rttm.name)
+        with open(rttm_path_for_manifest, "wb") as f:
+            f.write(reference_rttm.getbuffer())
+            
     # Create manifest
     manifest_path = os.path.join(tmpdir, "manifest.json")
     with open(manifest_path, "w") as fp:
@@ -121,11 +127,12 @@ def run_diarization(input_file: str, config_file: str) -> Dict[str, Any]:
             "label": "infer",
             "text": "-",
             "num_speakers": None,
-            "rttm_filepath": None,
+            "rttm_filepath": rttm_path_for_manifest if reference_rttm else None,
             "uem_filepath": None
         }, fp)
 
     # Load NeMo config
+    st.toast("config_file: " + config_file)
     config = OmegaConf.load(config_file)
     config.diarizer.manifest_filepath = manifest_path
     config.diarizer.out_dir = OUTPUT_DIR
@@ -185,12 +192,17 @@ def main():
         "Upload an audio file", type=["mp3", "mp4", "mpeg", "wav"]
     )
 
+    uploaded_rttm = st.sidebar.file_uploader("Upload reference RTTM file (optional)", type=["rttm"])
+
+    dir = Path(CONFIG_DIR)
     # Config files dropdown
-    config_files = [f for f in os.listdir(CONFIG_DIR) if f.endswith((".yaml", ".yml"))]
+    config_files = [str(f.relative_to(dir)) for f in dir.rglob("*.yaml")]  # include .yaml
+    config_files.sort()
+
     if not config_files:
         st.sidebar.error("No config files found in conf/inference/")
         st.stop()
-    selected_config = st.sidebar.selectbox("Select Diarization Config", config_files, index=1)
+    selected_config = st.sidebar.selectbox("Select Diarization Config", config_files, index=0)
 
     clicked = st.sidebar.button("Run Diarization")
 
@@ -214,7 +226,8 @@ def main():
             with st.spinner("Processing audio...", show_time=True):
                 st.session_state.diarization_results = run_diarization(
                     input_file,
-                    os.path.join(CONFIG_DIR, selected_config)
+                    os.path.join(CONFIG_DIR, selected_config), 
+                    reference_rttm=uploaded_rttm
                 )
                 st.toast("✅ Diarization complete!")
 
