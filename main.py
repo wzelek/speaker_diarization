@@ -29,12 +29,20 @@ def parse_rttm(rttm_path: str) -> List[Tuple[float, float, str]]:
             segments.append((start, start + duration, speaker))
     return segments
 
+import pandas as pd
+
 def rttm_to_dataframe(rttm_content: str) -> pd.DataFrame:
-    """Convert RTTM content to DataFrame with MM:SS columns."""
-    def sec_to_mmss(seconds: float) -> str:
-        m, s = divmod(int(seconds), 60)
-        return f"{m:02d}:{s:02d}"
+    """
+    Convert RTTM content to a DataFrame with dynamic speaker labeling (A, B, C...).
+    Format: [segment, label, speaker, start, end]
+    """
     
+    def format_timestamp(seconds: float) -> str:
+        """Helper to format seconds into HH:MM:SS.mmm"""
+        m, s = divmod(seconds, 60)
+        h, m = divmod(m, 60)
+        return f"{int(h):02d}:{int(m):02d}:{s:06.3f}"
+
     rows = []
     for line in rttm_content.strip().split("\n"):
         parts = line.split()
@@ -42,15 +50,24 @@ def rttm_to_dataframe(rttm_content: str) -> pd.DataFrame:
             start = float(parts[3])
             duration = float(parts[4])
             end = start + duration
-            speaker = parts[7]
+            speaker_raw = parts[7] # e.g., "speaker_1"
+
+            try:
+                spk_idx = int(speaker_raw.split('_')[-1])
+                label = chr(65 + spk_idx) 
+            except (ValueError, IndexError):
+                label = speaker_raw 
+            
+            segment_str = f"[ {format_timestamp(start)} --> {format_timestamp(end)}]"
+            
             rows.append({
-                "Speaker": speaker,
-                "Start (s)": round(start, 2),
-                "Start (MM:SS)": sec_to_mmss(start),
-                "End (s)": round(end, 2),
-                "End (MM:SS)": sec_to_mmss(end),
-                "Duration (s)": round(duration, 2),
+                "segment": segment_str,
+                "label": label,
+                "speaker": speaker_raw.upper().replace("SPEAKER_", "SPEAKER_0"), 
+                "start": round(start, 6),
+                "end": round(end, 6)
             })
+            
     return pd.DataFrame(rows)
 
 @st.cache_resource
