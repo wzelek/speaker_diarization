@@ -6,7 +6,7 @@
 # {"audio_filepath": "/path/to/audio_file", "offset": 0, "duration": null, "label": "infer", "text": "-", "num_speakers": null, "rttm_filepath": "/path/to/rttm/file", "uem_filepath": "/path/to/uem/file"}
 name: &name "ClusterDiarizer"
 
-num_workers: 1
+num_workers: 0
 sample_rate: 16000
 batch_size: 64
 device: null # can specify a specific device, i.e: cuda:1 (default cuda if cuda available, else cpu)
@@ -20,7 +20,7 @@ diarizer:
   ignore_overlap: True # Consider or ignore overlap segments while scoring
 
   vad:
-    model_path: vad_multilingual_marblenet # .nemo local model path or pretrained VAD model name 
+    model_path: vad_multilingual_marblenet # .nemo local model path or pretrained VAD model name
     external_vad_manifest: null # This option is provided to use external vad and provide its speech activity labels for speaker embeddings extraction. Only one of model_path or external_vad_manifest should be set
 
     parameters: # Tuned by detection error rate (false alarm + miss) on multilingual ASR evaluation datasets
@@ -56,7 +56,7 @@ diarizer:
       embeddings_per_chunk: 10000 # Number of embeddings in each chunk for long-form audio clustering. Adjust based on GPU memory capacity. (default: 10000, approximately 40 mins of audio) 
 
   msdd_model:
-    model_path: null  # .nemo local model path or pretrained model name for multiscale diarization decoder (MSDD)
+    model_path: None  # .nemo local model path or pretrained model name for multiscale diarization decoder (MSDD)
     parameters:
       use_speaker_model_from_ckpt: True # If True, use speaker embedding model in checkpoint. If False, the provided speaker embedding model in config will be used.
       infer_batch_size: 25 # Batch size for MSDD inference. 

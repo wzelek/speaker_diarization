@@ -1,0 +1,152 @@
+[NeMo I 2026-02-25 21:44:08 nemo_logging:393] Loading pretrained vad_multilingual_marblenet model from NGC
+[NeMo I 2026-02-25 21:44:08 nemo_logging:393] Found existing object C:\Users\witze\.cache\torch\NeMo\NeMo_2.6.2\vad_multilingual_marblenet\670f425c7f186060b7a7268ba6dfacb2\vad_multilingual_marblenet.nemo.
+[NeMo I 2026-02-25 21:44:08 nemo_logging:393] Re-using file from: C:\Users\witze\.cache\torch\NeMo\NeMo_2.6.2\vad_multilingual_marblenet\670f425c7f186060b7a7268ba6dfacb2\vad_multilingual_marblenet.nemo
+[NeMo I 2026-02-25 21:44:08 nemo_logging:393] Instantiating model from pre-trained checkpoint
+[NeMo W 2026-02-25 21:44:08 nemo_logging:405] Please use the EncDecSpeakerLabelModel instead of this model. EncDecClassificationModel model is kept for backward compatibility with older models.
+[NeMo W 2026-02-25 21:44:08 nemo_logging:405] If you intend to do training or fine-tuning, please call the ModelPT.setup_training_data() method and provide a valid configuration file to setup the train data loader.
+    Train config :
+    manifest_filepath: /manifests/ami_train_0.63.json,/manifests/freesound_background_train.json,/manifests/freesound_laughter_train.json,/manifests/fisher_2004_background.json,/manifests/fisher_2004_speech_sampled.json,/manifests/google_train_manifest.json,/manifests/icsi_all_0.63.json,/manifests/musan_freesound_train.json,/manifests/musan_music_train.json,/manifests/musan_soundbible_train.json,/manifests/mandarin_train_sample.json,/manifests/german_train_sample.json,/manifests/spanish_train_sample.json,/manifests/french_train_sample.json,/manifests/russian_train_sample.json
+    sample_rate: 16000
+    labels:
+    - background
+    - speech
+    batch_size: 256
+    shuffle: true
+    is_tarred: false
+    tarred_audio_filepaths: null
+    tarred_shard_strategy: scatter
+    augmentor:
+      shift:
+        prob: 0.5
+        min_shift_ms: -10.0
+        max_shift_ms: 10.0
+      white_noise:
+        prob: 0.5
+        min_level: -90
+        max_level: -46
+        norm: true
+      noise:
+        prob: 0.5
+        manifest_path: /manifests/noise_0_1_musan_fs.json
+        min_snr_db: 0
+        max_snr_db: 30
+        max_gain_db: 300.0
+        norm: true
+      gain:
+        prob: 0.5
+        min_gain_dbfs: -10.0
+        max_gain_dbfs: 10.0
+        norm: true
+    num_workers: 16
+    pin_memory: true
+
+[NeMo W 2026-02-25 21:44:08 nemo_logging:405] If you intend to do validation, please call the ModelPT.setup_validation_data() or ModelPT.setup_multiple_validation_data() method and provide a valid configuration file to setup the validation data loader(s).
+    Validation config :
+    manifest_filepath: /manifests/ami_dev_0.63.json,/manifests/freesound_background_dev.json,/manifests/freesound_laughter_dev.json,/manifests/ch120_moved_0.63.json,/manifests/fisher_2005_500_speech_sampled.json,/manifests/google_dev_manifest.json,/manifests/musan_music_dev.json,/manifests/mandarin_dev.json,/manifests/german_dev.json,/manifests/spanish_dev.json,/manifests/french_dev.json,/manifests/russian_dev.json
+    sample_rate: 16000
+    labels:
+    - background
+    - speech
+    batch_size: 256
+    shuffle: false
+    val_loss_idx: 0
+    num_workers: 16
+    pin_memory: true
+
+[NeMo W 2026-02-25 21:44:08 nemo_logging:405] Please call the ModelPT.setup_test_data() or ModelPT.setup_multiple_test_data() method and provide a valid configuration file to setup the test data loader(s).
+    Test config :
+    manifest_filepath: null
+    sample_rate: 16000
+    labels:
+    - background
+    - speech
+    batch_size: 128
+    shuffle: false
+    test_loss_idx: 0
+
+[NeMo I 2026-02-25 21:44:08 nemo_logging:393] PADDING: 16
+[NeMo I 2026-02-25 21:44:09 nemo_logging:393] Model EncDecClassificationModel was successfully restored from C:\Users\witze\.cache\torch\NeMo\NeMo_2.6.2\vad_multilingual_marblenet\670f425c7f186060b7a7268ba6dfacb2\vad_multilingual_marblenet.nemo.
+[NeMo I 2026-02-25 21:44:09 nemo_logging:393] Loading pretrained titanet_large model from NGC
+[NeMo I 2026-02-25 21:44:09 nemo_logging:393] Found existing object C:\Users\witze\.cache\torch\NeMo\NeMo_2.6.2\titanet-l\11ba0924fdf87c049e339adbf6899d48\titanet-l.nemo.
+[NeMo I 2026-02-25 21:44:09 nemo_logging:393] Re-using file from: C:\Users\witze\.cache\torch\NeMo\NeMo_2.6.2\titanet-l\11ba0924fdf87c049e339adbf6899d48\titanet-l.nemo
+[NeMo I 2026-02-25 21:44:09 nemo_logging:393] Instantiating model from pre-trained checkpoint
+[NeMo W 2026-02-25 21:44:09 nemo_logging:405] If you intend to do training or fine-tuning, please call the ModelPT.setup_training_data() method and provide a valid configuration file to setup the train data loader.
+    Train config :
+    manifest_filepath: /manifests/combined_fisher_swbd_voxceleb12_librispeech/train.json
+    sample_rate: 16000
+    labels: null
+    batch_size: 64
+    shuffle: true
+    is_tarred: false
+    tarred_audio_filepaths: null
+    tarred_shard_strategy: scatter
+    augmentor:
+      noise:
+        manifest_path: /manifests/noise/rir_noise_manifest.json
+        prob: 0.5
+        min_snr_db: 0
+        max_snr_db: 15
+      speed:
+        prob: 0.5
+        sr: 16000
+        resample_type: kaiser_fast
+        min_speed_rate: 0.95
+        max_speed_rate: 1.05
+    num_workers: 15
+    pin_memory: true
+
+[NeMo W 2026-02-25 21:44:09 nemo_logging:405] If you intend to do validation, please call the ModelPT.setup_validation_data() or ModelPT.setup_multiple_validation_data() method and provide a valid configuration file to setup the validation data loader(s).
+    Validation config :
+    manifest_filepath: /manifests/combined_fisher_swbd_voxceleb12_librispeech/dev.json
+    sample_rate: 16000
+    labels: null
+    batch_size: 128
+    shuffle: false
+    num_workers: 15
+    pin_memory: true
+
+[NeMo I 2026-02-25 21:44:09 nemo_logging:393] PADDING: 16
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] Model EncDecSpeakerLabelModel was successfully restored from C:\Users\witze\.cache\torch\NeMo\NeMo_2.6.2\titanet-l\11ba0924fdf87c049e339adbf6899d48\titanet-l.nemo.
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] Number of files to diarize: 1
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] Split long audio file to avoid CUDA memory issue
+[NeMo W 2026-02-25 21:44:10 nemo_logging:405] Deleting previous clustering diarizer outputs.
+splitting manifest: 100%|██████████| 1/1 [00:00<00:00, 10.93it/s]
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] The prepared manifest file exists. Overwriting!
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] Perform streaming frame-level VAD
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] Filtered duration for loading collection is  0.00 hours.
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] Dataset successfully loaded with 6 items and total duration provided from manifest is  0.07 hours.
+[NeMo I 2026-02-25 21:44:10 nemo_logging:393] # 6 files loaded accounting to # 1 labels
+vad: 100%|██████████| 6/6 [00:03<00:00,  1.56it/s]
+creating speech segments: 100%|██████████| 1/1 [00:00<00:00, 63.34it/s]
+[NeMo I 2026-02-25 21:44:14 nemo_logging:393] Converting frame level prediction to speech/no-speech segment in start and end times format.
+[NeMo I 2026-02-25 21:44:14 nemo_logging:393] Subsegmentation for embedding extraction: scale0, diarization_output\speaker_outputs\subsegments_scale0.json
+[NeMo I 2026-02-25 21:44:14 nemo_logging:393] Extracting embeddings for Diarization
+[NeMo I 2026-02-25 21:44:14 nemo_logging:393] Filtered duration for loading collection is  0.00 hours.
+[NeMo I 2026-02-25 21:44:14 nemo_logging:393] Dataset successfully loaded with 269 items and total duration provided from manifest is  0.14 hours.
+[NeMo I 2026-02-25 21:44:14 nemo_logging:393] # 269 files loaded accounting to # 1 labels
+[1/3] extract embeddings: 100%|██████████| 5/5 [00:03<00:00,  1.66it/s]
+[NeMo I 2026-02-25 21:44:17 nemo_logging:393] Saved embedding files to diarization_output\speaker_outputs\embeddings
+[NeMo I 2026-02-25 21:44:17 nemo_logging:393] Subsegmentation for embedding extraction: scale1, diarization_output\speaker_outputs\subsegments_scale1.json
+[NeMo I 2026-02-25 21:44:17 nemo_logging:393] Extracting embeddings for Diarization
+[NeMo I 2026-02-25 21:44:17 nemo_logging:393] Filtered duration for loading collection is  0.00 hours.
+[NeMo I 2026-02-25 21:44:17 nemo_logging:393] Dataset successfully loaded with 426 items and total duration provided from manifest is  0.14 hours.
+[NeMo I 2026-02-25 21:44:17 nemo_logging:393] # 426 files loaded accounting to # 1 labels
+[2/3] extract embeddings: 100%|██████████| 7/7 [00:03<00:00,  2.08it/s]
+[NeMo I 2026-02-25 21:44:20 nemo_logging:393] Saved embedding files to diarization_output\speaker_outputs\embeddings
+[NeMo I 2026-02-25 21:44:20 nemo_logging:393] Subsegmentation for embedding extraction: scale2, diarization_output\speaker_outputs\subsegments_scale2.json
+[NeMo I 2026-02-25 21:44:20 nemo_logging:393] Extracting embeddings for Diarization
+[NeMo I 2026-02-25 21:44:20 nemo_logging:393] Filtered duration for loading collection is  0.00 hours.
+[NeMo I 2026-02-25 21:44:20 nemo_logging:393] Dataset successfully loaded with 1024 items and total duration provided from manifest is  0.14 hours.
+[NeMo I 2026-02-25 21:44:20 nemo_logging:393] # 1024 files loaded accounting to # 1 labels
+[3/3] extract embeddings: 100%|██████████| 16/16 [00:03<00:00,  4.70it/s]
+[NeMo I 2026-02-25 21:44:24 nemo_logging:393] Saved embedding files to diarization_output\speaker_outputs\embeddings
+clustering: 100%|██████████| 1/1 [00:00<00:00,  2.03it/s]
+[NeMo I 2026-02-25 21:44:24 nemo_logging:393] Outputs are saved in C:\Users\witze\Documents\GitHub\speaker_diarization\diarization_output directory
+[NeMo I 2026-02-25 21:44:24 nemo_logging:393]
+          diarization error rate    total  correct        false alarm      missed detection      confusion
+                               %                        %                %                     %              %
+    item
+    input                    0.0  250.129  250.129  100.0         0.0  0.0              0.0  0.0       0.0  0.0
+    TOTAL                    0.0  250.129  250.129  100.0         0.0  0.0              0.0  0.0       0.0  0.0
+[NeMo I 2026-02-25 21:44:24 nemo_logging:393] Cumulative Results for collar 0.25 sec and ignore_overlap True:
+    | FA: 0.0000 | MISS: 0.0000 | CER: 0.0000 | DER: 0.0000 | Spk. Count Acc. 1.0000

@@ -1,5 +1,6 @@
 import os
 import json
+import pickle
 import tempfile
 from typing import List, Tuple, Dict, Any
 
@@ -10,8 +11,11 @@ import soundfile as sf
 import plotly.graph_objs as go
 from pydub import AudioSegment
 from omegaconf import OmegaConf
-from nemo.collections.asr.models import ClusteringDiarizer
+from nemo.collections.asr.models import ClusteringDiarizer, NeuralDiarizer
 from pathlib import Path
+import plotly.express as px
+
+from sklearn.decomposition import PCA
 
 DEFAULT_FILE = "conversation.mp3"
 OUTPUT_DIR = "diarization_output"
@@ -79,29 +83,37 @@ def load_audio(wav_path: str) -> Tuple[np.ndarray, int]:
     return audio_data, sr
 
 def plot_waveform_with_speakers(audio_data: np.ndarray, sr: int, segments: List[Tuple[float, float, str]]) -> go.Figure:
-    """Create interactive waveform with speaker regions."""
-    time_axis = np.linspace(0, len(audio_data)/sr, num=len(audio_data))
+    """Create interactive waveform with speaker regions with formatted time."""
+
+    duration = len(audio_data) / sr
+    time_axis = np.linspace(0, duration, num=len(audio_data))
+
+    time_axis_dt = pd.to_datetime(time_axis, unit="s")
+
     speakers = list({s[2] for s in segments})
     colors = {spk: f"rgba({i*50%255},{i*80%255},{i*120%255},0.4)" for i, spk in enumerate(speakers)}
 
-    # Downsample for plotting performance
+    # Downsample
     ds = max(len(audio_data)//5000, 1)
-    time_axis_ds = time_axis[::ds]
+    time_axis_dt_ds = time_axis_dt[::ds]
     audio_ds = audio_data[::ds]
 
     fig = go.Figure()
+
     fig.add_trace(go.Scatter(
-        x=time_axis_ds,
+        x=time_axis_dt_ds,
         y=audio_ds,
         mode='lines',
         line=dict(color='lightgrey'),
-        name='Waveform'
+        name='Waveform',
+        hovertemplate="Time: %{x|%H:%M:%S.%L}<br>Amplitude: %{y:.3f}<extra></extra>"
     ))
 
-    # Add speaker regions
+    # Speaker regions
     for start, end, speaker in segments:
         fig.add_vrect(
-            x0=start, x1=end,
+            x0=pd.to_datetime(start, unit="s"),
+            x1=pd.to_datetime(end, unit="s"),
             fillcolor=colors[speaker],
             opacity=0.4,
             line_width=0,
@@ -111,11 +123,15 @@ def plot_waveform_with_speakers(audio_data: np.ndarray, sr: int, segments: List[
 
     fig.update_layout(
         title="Speaker Timeline",
-        xaxis_title="Time (s)",
+        xaxis_title="Time",
         yaxis_title="Amplitude",
         showlegend=False,
-        height=400
+        height=400,
+        xaxis=dict(
+            tickformat="%H:%M:%S"
+        )
     )
+
     return fig
 
 
@@ -152,10 +168,14 @@ def run_diarization(input_file: str, config_file: str, reference_rttm: str = Non
     st.toast("config_file: " + config_file)
     config = OmegaConf.load(config_file)
     config.diarizer.manifest_filepath = manifest_path
-    config.diarizer.out_dir = OUTPUT_DIR
+    config.diarizer.out_dir  = OUTPUT_DIR
 
     # Run diarization
-    model = ClusteringDiarizer(cfg=config)
+    if config.diarizer.vad:
+        model = ClusteringDiarizer(cfg=config)
+    else:
+        model = NeuralDiarizer(cfg=config)
+
     model.diarize()
 
     # Load RTTM
@@ -163,11 +183,16 @@ def run_diarization(input_file: str, config_file: str, reference_rttm: str = Non
     if not os.path.exists(rttm_file):
         raise FileNotFoundError("No RTTM file generated.")
     
-    with open(rttm_file, "r") as f:
+    with open(rttm_file, "r") as f: # https://www.bbc.co.uk/programmes/p02nq0gn/episodes/downloads
         rttm_content = f.read()
 
     audio_data, sr = load_audio(wav_path)
     segments = parse_rttm(rttm_file)
+
+    # embeddings_dir = os.path.join(
+    #     OUTPUT_DIR, "speaker_outputs", "embeddings"
+    # )
+    # embeddings_all = load_all_embeddings(embeddings_dir)
 
     return {
         "input_file": input_file,
@@ -176,11 +201,12 @@ def run_diarization(input_file: str, config_file: str, reference_rttm: str = Non
         "audio_data": audio_data,
         "sr": sr,
         "segments": segments,
+        # "embeddings_all": embeddings_all,
         "tmpdir": tmpdir
     }
 
 def display_results(results: Dict[str, Any]):
-    """Display RTTM table, waveform, and audio player."""
+
     df_rttm = rttm_to_dataframe(results["rttm_content"])
     st.subheader("Diarization Segments")
     st.dataframe(df_rttm)
@@ -198,6 +224,19 @@ def display_results(results: Dict[str, Any]):
     fig = plot_waveform_with_speakers(results["audio_data"], results["sr"], results["segments"])
     st.plotly_chart(fig, use_container_width=True)
     st.audio(results["wav_path"])
+
+
+def load_all_embeddings(emb_dir: str) -> dict:
+    """
+    Load all .pkl files from embeddings directory.
+    Returns a dict {filename: embeddings_array}.
+    """
+    embeddings_dict = {}
+    if os.path.exists(emb_dir):
+        for pkl_file in sorted(Path(emb_dir).glob("*.pkl")):
+            with open(pkl_file, "rb") as f:
+                embeddings_dict[pkl_file.name] = pickle.load(f)
+    return embeddings_dict
 
 
 def main():
