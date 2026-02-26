@@ -1,21 +1,17 @@
-import os
 import json
+import os
 import pickle
 import tempfile
+from pathlib import Path
 from typing import List, Tuple, Dict, Any
 
-import streamlit as st
-import pandas as pd
 import numpy as np
-import soundfile as sf
 import plotly.graph_objs as go
-from pydub import AudioSegment
-from omegaconf import OmegaConf
+import soundfile as sf
+import streamlit as st
 from nemo.collections.asr.models import ClusteringDiarizer, NeuralDiarizer
-from pathlib import Path
-import plotly.express as px
-
-from sklearn.decomposition import PCA
+from omegaconf import OmegaConf
+from pydub import AudioSegment
 
 DEFAULT_FILE = "conversation.mp3"
 OUTPUT_DIR = "diarization_output"
@@ -171,10 +167,12 @@ def run_diarization(input_file: str, config_file: str, reference_rttm: str = Non
     config.diarizer.out_dir  = OUTPUT_DIR
 
     # Run diarization
-    if config.diarizer.vad:
+    if config.diarizer.vad.model_path and not config.diarizer.get("model_path"):
         model = ClusteringDiarizer(cfg=config)
-    else:
+    elif config.diarizer.msdd_model.model_path:
         model = NeuralDiarizer(cfg=config)
+    else:
+        raise Exception("Missing diarizer model path")
 
     model.diarize()
 
@@ -188,11 +186,6 @@ def run_diarization(input_file: str, config_file: str, reference_rttm: str = Non
 
     audio_data, sr = load_audio(wav_path)
     segments = parse_rttm(rttm_file)
-
-    # embeddings_dir = os.path.join(
-    #     OUTPUT_DIR, "speaker_outputs", "embeddings"
-    # )
-    # embeddings_all = load_all_embeddings(embeddings_dir)
 
     return {
         "input_file": input_file,
@@ -210,7 +203,6 @@ def display_results(results: Dict[str, Any]):
     df_rttm = rttm_to_dataframe(results["rttm_content"])
     st.subheader("Diarization Segments")
     st.dataframe(df_rttm)
-
 
     rttm_filename = os.path.splitext(os.path.basename(results['input_file']))[0] + ".rttm"
 
